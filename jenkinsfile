@@ -1,28 +1,44 @@
 pipeline {
     agent any
 
+    environment {
+        GOOGLE_APPLICATION_CREDENTIALS = credentials('gke-key')  // This uses the uploaded service account key
+        PROJECT_ID = 'your-gcp-project-id'
+        CLUSTER = 'your-cluster-name'
+        ZONE = 'your-cluster-zone'
+    }
+
     stages {
         stage('Clone Repo') {
             steps {
-                git branch: 'main', url: 'https://github.com/mic40472/timer.git'
+                // Git clone to fetch the latest changes from GitHub
+                git 'https://github.com/mic40472/timer.git'
             }
         }
 
         stage('Install Packages') {
             steps {
+                // Install necessary packages for your application
                 sh 'npm install'
             }
         }
 
         stage('Build') {
             steps {
+                // This is a placeholder step for any custom build logic
                 echo 'Build step (can be customized)'
             }
         }
 
         stage('Deploy to GKE') {
             steps {
-                echo 'Here you can run your kubectl deployment logic'
+                // Authenticate with GCP and deploy to GKE
+                sh '''
+                    gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                    gcloud config set project $PROJECT_ID
+                    gcloud container clusters get-credentials $CLUSTER --zone $ZONE
+                    kubectl apply -f k8s/
+                '''
             }
         }
     }
