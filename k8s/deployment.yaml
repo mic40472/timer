@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: custom-ksa
+  namespace: suresh
+  annotations:
+    iam.gke.io/gcp-service-account: sur-545@gcp-env-dev.iam.gserviceaccount.com
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pro1
+  namespace: suresh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pro1
+  template:
+    metadata:
+      labels:
+        app: pro1
+    spec:
+      serviceAccountName: custom-ksa
+      containers:
+      - name: app
+        image: us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1:us1.0.3
+        ports:
+        - containerPort: 3000
+
