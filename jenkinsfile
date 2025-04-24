@@ -1,0 +1,29 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Clone Repo') {
+            steps {
+                git 'https://github.com/mic40472/timer.git'
+            }
+        }
+
+        stage('Install Packages') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo 'Build step (can be customized)'
+            }
+        }
+
+        stage('Deploy to GKE') {
+            steps {
+                echo 'Here you can run your kubectl deployment logic'
+            }
+        }
+    }
+}
