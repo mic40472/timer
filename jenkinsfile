@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        GOOGLE_APPLICATION_CREDENTIALS = credentials('gke-key') // Jenkins credential ID for GCP service account
+        GOOGLE_APPLICATION_CREDENTIALS = credentials('gke-key') // GCP service account credential ID
         PROJECT_ID = 'gcp-env-dev'
         CLUSTER = 'kube-cluster'
         ZONE = 'us-central1-c'
@@ -10,18 +10,9 @@ pipeline {
     }
 
     stages {
-        stage('Add GitHub to Known Hosts') {
-            steps {
-                sh '''
-                    mkdir -p ~/.ssh
-                    ssh-keyscan github.com >> ~/.ssh/known_hosts
-                '''
-            }
-        }
-
         stage('Clone Repo') {
             steps {
-                git credentialsId: 'github-pat', url: 'git@github.com:mic40472/timer.git'
+                git branch: 'main', credentialsId: 'github-pat', url: 'git@github.com:mic40472/timer.git'
             }
         }
 
@@ -33,7 +24,9 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t ${ARTIFACTORY}:${BUILD_NUMBER} .'
+                sh '''
+                    docker build -t ${ARTIFACTORY}:${BUILD_NUMBER} .
+                '''
             }
         }
 
@@ -51,13 +44,17 @@ pipeline {
 
         stage('Deploy to GKE') {
             steps {
-                sh '''
-                    gcloud config set project $PROJECT_ID
-                    gcloud container clusters get-credentials $CLUSTER --zone $ZONE
-                    kubectl apply -f k8s/
-                    kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER}
-                '''
+                withCredentials([file(credentialsId: 'gke-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    sh '''
+                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud config set project $PROJECT_ID
+                        gcloud container clusters get-credentials $CLUSTER --zone $ZONE
+                        kubectl apply -f k8s/
+                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER}
+                    '''
+                }
             }
         }
     }
 }
+
