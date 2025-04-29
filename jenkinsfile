@@ -2,39 +2,43 @@ pipeline {
     agent any
 
     environment {
-        GOOGLE_APPLICATION_CREDENTIALS = credentials('gke-key') // GCP service account credential ID
         PROJECT_ID = 'gcp-env-dev'
         CLUSTER = 'kube-cluster'
         ZONE = 'us-central1-c'
         ARTIFACTORY = 'us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1'
+        // Note: Don't declare GOOGLE_APPLICATION_CREDENTIALS here when using withCredentials
     }
 
     stages {
         stage('Clone Repo') {
             steps {
-                git branch: 'main', credentialsId: 'github-pat', url: 'git@github.com:mic40472/timer.git'
+                git branch: 'main', 
+                credentialsId: 'github-pat', 
+                url: 'git@github.com:mic40472/timer.git'
             }
         }
 
         stage('Install Packages') {
             steps {
                 sh 'npm install'
+                // Add build step if needed:
+                // sh 'npm run build'
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh '''
-                    docker build -t ${ARTIFACTORY}:${BUILD_NUMBER} .
-                '''
+                script {
+                    docker.build("${ARTIFACTORY}:${BUILD_NUMBER}")
+                }
             }
         }
 
         stage('Push to Artifact Registry') {
             steps {
-                withCredentials([file(credentialsId: 'gke-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                withCredentials([file(credentialsId: 'gke-key', variable: 'GC_KEY')]) {
                     sh '''
-                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud auth activate-service-account --key-file=$GC_KEY
                         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
                         docker push ${ARTIFACTORY}:${BUILD_NUMBER}
                     '''
@@ -44,16 +48,33 @@ pipeline {
 
         stage('Deploy to GKE') {
             steps {
-                withCredentials([file(credentialsId: 'gke-key', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                withCredentials([file(credentialsId: 'gke-key', variable: 'GC_KEY')]) {
                     sh '''
-                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud auth activate-service-account --key-file=$GC_KEY
                         gcloud config set project $PROJECT_ID
                         gcloud container clusters get-credentials $CLUSTER --zone $ZONE
+                        
+                        # Add rollout status check
                         kubectl apply -f k8s/
                         kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER}
+                        kubectl rollout status deployment/app-deployment --timeout=300s
                     '''
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            // Clean up Docker images to save disk space
+            sh 'docker rmi ${ARTIFACTORY}:${BUILD_NUMBER} || true'
+        }
+        failure {
+            // Optional: Add notification here
+            echo 'Pipeline failed!'
+        }
+        success {
+            echo 'Pipeline succeeded!'
         }
     }
 }
