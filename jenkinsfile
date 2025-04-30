@@ -1,13 +1,18 @@
 pipeline {
     agent any
     tools {
-        git 'Default'  // Requires Git plugin installed
+        git 'Default' // Ensure Git is available
     }
+
     environment {
         PROJECT_ID = 'gcp-env-dev'
         CLUSTER = 'kube-cluster'
         ZONE = 'us-central1-c'
-        ARTIFACTORY = 'us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1'
+        REGION = 'us-central1'
+        REPO = 'image-repo'
+        IMAGE_NAME = 'pro-1'
+        ARTIFACTORY = "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${IMAGE_NAME}"
+        NAMESPACE = 'suresh'
     }
 
     stages {
@@ -28,15 +33,13 @@ pipeline {
         stage('Setup Environment') {
             steps {
                 script {
-                    // Install Node.js if missing
                     if (!sh(returnStatus: true, script: 'which node')) {
                         sh '''
                             curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
                             sudo apt-get install -y nodejs
                         '''
                     }
-                    // Verify Docker access
-                    sh 'docker ps >/dev/null'  // Test Docker connectivity
+                    sh 'docker ps > /dev/null'
                 }
             }
         }
@@ -47,22 +50,22 @@ pipeline {
             }
         }
 
-        stage('Docker Build') {
-            steps {
-                sh '''
-                    docker build -t ${ARTIFACTORY}:${BUILD_NUMBER} .
-                '''
-            }
-        }
-
-        stage('Push to Artifact Registry') {
+        stage('Docker Build and Push') {
             steps {
                 withCredentials([file(credentialsId: 'gke-key', variable: 'GC_KEY')]) {
-                    sh '''
-                        gcloud auth activate-service-account --key-file=$GC_KEY
-                        gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-                        docker push ${ARTIFACTORY}:${BUILD_NUMBER}
-                    '''
+                    script {
+                        def buildTag = "${BUILD_NUMBER}"
+                        def latestTag = "latest"
+                        
+                        sh '''
+                            gcloud auth activate-service-account --key-file=$GC_KEY
+                            gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+                            docker build -t ${ARTIFACTORY}:${buildTag} -t ${ARTIFACTORY}:${latestTag} .
+                            docker push ${ARTIFACTORY}:${buildTag}
+                            docker push ${ARTIFACTORY}:${latestTag}
+                        '''
+                    }
                 }
             }
         }
@@ -70,13 +73,22 @@ pipeline {
         stage('Deploy to GKE') {
             steps {
                 withCredentials([file(credentialsId: 'gke-key', variable: 'GC_KEY')]) {
-                    sh '''
-                        gcloud auth activate-service-account --key-file=$GC_KEY
-                        gcloud config set project $PROJECT_ID
-                        gcloud container clusters get-credentials $CLUSTER --zone $ZONE
-                        kubectl apply -f k8s/
-                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER}
-                    '''
+                    script {
+                        sh '''
+                            gcloud auth activate-service-account --key-file=$GC_KEY
+                            gcloud config set project $PROJECT_ID
+                            gcloud container clusters get-credentials $CLUSTER --zone $ZONE
+
+                            # Apply manifests (but avoid hardcoded image tag in deployment.yaml)
+                            kubectl apply -f k8s/ -n $NAMESPACE
+
+                            # Update image with unique tag to force redeploy
+                            kubectl set image deployment/app-deployment -n $NAMESPACE node-app=${ARTIFACTORY}:${BUILD_NUMBER}
+
+                            # Optional: Wait for rollout to complete
+                            kubectl rollout status deployment/app-deployment -n $NAMESPACE
+                        '''
+                    }
                 }
             }
         }
@@ -84,6 +96,7 @@ pipeline {
 
     post {
         always {
+            // Clean only the numbered image from local cache
             sh 'docker rmi ${ARTIFACTORY}:${BUILD_NUMBER} || true'
         }
     }
