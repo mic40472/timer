@@ -5,23 +5,33 @@ pipeline {
         PROJECT_ID = 'gcp-env-dev'
         CLUSTER = 'kube-cluster'
         ZONE = 'us-central1-c'
-        ARTIFACTORY = 'us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1'
-        // Note: Don't declare GOOGLE_APPLICATION_CREDENTIALS here when using withCredentials
+        ARTIFACTORY_IMAGE = 'us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1'
     }
 
     stages {
         stage('Clone Repo') {
             steps {
                 git branch: 'main', 
-                credentialsId: 'github-pat', 
-                url: 'git@github.com:mic40472/timer.git'
+                    credentialsId: 'github-pat', 
+                    url: 'git@github.com:mic40472/timer.git'
+            }
+        }
+
+        stage('Install Node.js 16.x') {
+            steps {
+                sh '''
+                    curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
+                    sudo apt-get install -y nodejs
+                    node -v
+                    npm -v
+                '''
             }
         }
 
         stage('Install Packages') {
             steps {
                 sh 'npm install'
-                // Add build step if needed:
+                // Uncomment below if needed
                 // sh 'npm run build'
             }
         }
@@ -29,7 +39,7 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    docker.build("${ARTIFACTORY}:${BUILD_NUMBER}")
+                    docker.build("${ARTIFACTORY_IMAGE}:${BUILD_NUMBER}")
                 }
             }
         }
@@ -40,7 +50,7 @@ pipeline {
                     sh '''
                         gcloud auth activate-service-account --key-file=$GC_KEY
                         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-                        docker push ${ARTIFACTORY}:${BUILD_NUMBER}
+                        docker push ${ARTIFACTORY_IMAGE}:${BUILD_NUMBER}
                     '''
                 }
             }
@@ -53,10 +63,9 @@ pipeline {
                         gcloud auth activate-service-account --key-file=$GC_KEY
                         gcloud config set project $PROJECT_ID
                         gcloud container clusters get-credentials $CLUSTER --zone $ZONE
-                        
-                        # Add rollout status check
+
                         kubectl apply -f k8s/
-                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER}
+                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY_IMAGE}:${BUILD_NUMBER}
                         kubectl rollout status deployment/app-deployment --timeout=300s
                     '''
                 }
@@ -66,11 +75,9 @@ pipeline {
 
     post {
         always {
-            // Clean up Docker images to save disk space
-            sh 'docker rmi ${ARTIFACTORY}:${BUILD_NUMBER} || true'
+            sh 'docker rmi ${ARTIFACTORY_IMAGE}:${BUILD_NUMBER} || true'
         }
         failure {
-            // Optional: Add notification here
             echo 'Pipeline failed!'
         }
         success {
@@ -78,4 +85,3 @@ pipeline {
         }
     }
 }
-
