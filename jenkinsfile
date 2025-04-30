@@ -8,7 +8,7 @@ pipeline {
         CLUSTER = 'kube-cluster'
         ZONE = 'us-central1-c'
         ARTIFACTORY = 'us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1'
-        REGION = 'us-central1'
+        NAMESPACE = 'suresh'  // Your namespace name here
     }
 
     stages {
@@ -48,23 +48,22 @@ pipeline {
             }
         }
 
-        stage('Docker Build and Push') {
+        stage('Docker Build') {
+            steps {
+                sh '''
+                    docker build -t ${ARTIFACTORY}:${BUILD_NUMBER} .
+                '''
+            }
+        }
+
+        stage('Push to Artifact Registry') {
             steps {
                 withCredentials([file(credentialsId: 'gke-key', variable: 'GC_KEY')]) {
-                    script {
-                        def buildTag = env.BUILD_NUMBER
-                        def latestTag = "latest"
-                        def imagePath = "${env.ARTIFACTORY}"
-
-                        sh """
-                            gcloud auth activate-service-account --key-file=$GC_KEY
-                            gcloud auth configure-docker ${env.REGION}-docker.pkg.dev --quiet
-
-                            docker build -t ${imagePath}:${buildTag} -t ${imagePath}:${latestTag} .
-                            docker push ${imagePath}:${buildTag}
-                            docker push ${imagePath}:${latestTag}
-                        """
-                    }
+                    sh '''
+                        gcloud auth activate-service-account --key-file=$GC_KEY
+                        gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+                        docker push ${ARTIFACTORY}:${BUILD_NUMBER}
+                    '''
                 }
             }
         }
@@ -76,8 +75,12 @@ pipeline {
                         gcloud auth activate-service-account --key-file=$GC_KEY
                         gcloud config set project $PROJECT_ID
                         gcloud container clusters get-credentials $CLUSTER --zone $ZONE
-                        kubectl apply -f k8s/
-                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER}
+
+                        # Ensure the deployment exists in the correct namespace (suresh)
+                        kubectl get deployment app-deployment --namespace=$NAMESPACE || kubectl apply -f k8s/deployment.yaml --namespace=$NAMESPACE
+
+                        # Set the image for the deployment
+                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER} --namespace=$NAMESPACE
                     '''
                 }
             }
