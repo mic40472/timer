@@ -1,46 +1,57 @@
 pipeline {
     agent any
-
+    tools {
+        git 'Default'  // Requires Git plugin installed
+    }
     environment {
         PROJECT_ID = 'gcp-env-dev'
         CLUSTER = 'kube-cluster'
         ZONE = 'us-central1-c'
-        ARTIFACTORY_IMAGE = 'us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1'
+        ARTIFACTORY = 'us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1'
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Checkout') {
             steps {
-                git branch: 'main', 
-                    credentialsId: 'github-pat', 
-                    url: 'git@github.com:mic40472/timer.git'
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    extensions: [[$class: 'CleanBeforeCheckout']],
+                    userRemoteConfigs: [[
+                        credentialsId: 'github-pat',
+                        url: 'git@github.com:mic40472/timer.git'
+                    ]]
+                ])
             }
         }
 
-        stage('Install Node.js 16.x') {
+        stage('Setup Environment') {
             steps {
-                sh '''
-                    curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-                    sudo apt-get install -y nodejs
-                    node -v
-                    npm -v
-                '''
+                script {
+                    // Install Node.js if missing
+                    if (!sh(returnStatus: true, script: 'which node')) {
+                        sh '''
+                            curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
+                            apt-get install -y nodejs
+                        '''
+                    }
+                    // Verify Docker access
+                    sh 'docker ps >/dev/null'  // Test Docker connectivity
+                }
             }
         }
 
         stage('Install Packages') {
             steps {
                 sh 'npm install'
-                // Uncomment below if needed
-                // sh 'npm run build'
             }
         }
 
         stage('Docker Build') {
             steps {
-                script {
-                    docker.build("${ARTIFACTORY_IMAGE}:${BUILD_NUMBER}")
-                }
+                sh '''
+                    docker build -t ${ARTIFACTORY}:${BUILD_NUMBER} .
+                '''
             }
         }
 
@@ -50,7 +61,7 @@ pipeline {
                     sh '''
                         gcloud auth activate-service-account --key-file=$GC_KEY
                         gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-                        docker push ${ARTIFACTORY_IMAGE}:${BUILD_NUMBER}
+                        docker push ${ARTIFACTORY}:${BUILD_NUMBER}
                     '''
                 }
             }
@@ -63,10 +74,8 @@ pipeline {
                         gcloud auth activate-service-account --key-file=$GC_KEY
                         gcloud config set project $PROJECT_ID
                         gcloud container clusters get-credentials $CLUSTER --zone $ZONE
-
                         kubectl apply -f k8s/
-                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY_IMAGE}:${BUILD_NUMBER}
-                        kubectl rollout status deployment/app-deployment --timeout=300s
+                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER}
                     '''
                 }
             }
@@ -75,13 +84,7 @@ pipeline {
 
     post {
         always {
-            sh 'docker rmi ${ARTIFACTORY_IMAGE}:${BUILD_NUMBER} || true'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
-        success {
-            echo 'Pipeline succeeded!'
+            sh 'docker rmi ${ARTIFACTORY}:${BUILD_NUMBER} || true'
         }
     }
 }
