@@ -77,10 +77,10 @@ pipeline {
                         gcloud container clusters get-credentials $CLUSTER --zone $ZONE
 
                         # Ensure the deployment exists in the correct namespace (suresh)
-                        kubectl get deployment app-deployment --namespace=$NAMESPACE || kubectl apply -f k8s/deployment.yaml --namespace=$NAMESPACE
+                        kubectl get deployment pro1 --namespace=$NAMESPACE || kubectl apply -f k8s/deployment.yaml --namespace=$NAMESPACE
 
                         # Set the image for the deployment
-                        kubectl set image deployment/app-deployment node-app=${ARTIFACTORY}:${BUILD_NUMBER} --namespace=$NAMESPACE
+                        kubectl set image deployment/pro1 node-app=${ARTIFACTORY}:${BUILD_NUMBER} --namespace=$NAMESPACE
                     '''
                 }
             }
