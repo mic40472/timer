@@ -12,7 +12,7 @@ metadata:
   name: pro1
   namespace: suresh
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: pro1
@@ -24,7 +24,7 @@ spec:
       serviceAccountName: custom-ksa
       containers:
       - name: app
-        image: us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1:us1.0.3
+        image: us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1:latest
         ports:
         - containerPort: 3000
 
