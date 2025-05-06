@@ -11,7 +11,7 @@ setInterval(() => {
 const elapsedMs = Date.now() - startTime;
 const seconds = Math.floor(elapsedMs / 1000) % 60;
 const minutes = Math.floor(elapsedMs / 1000 / 60);
-console.log(Server uptime: ${minutes}m ${seconds}s);
+console.log('Server uptime: ${minutes}m ${seconds}s');
 }, 1000);
 
 server.listen(8080, () => {
