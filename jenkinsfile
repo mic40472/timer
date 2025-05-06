@@ -80,7 +80,7 @@ pipeline {
                         kubectl get deployment pro1 --namespace=$NAMESPACE || kubectl apply -f k8s/deployment.yaml --namespace=$NAMESPACE
 
                         # Set the image for the deployment
-                        kubectl set image deployment/pro1 node-app=${ARTIFACTORY}:${BUILD_NUMBER} --namespace=$NAMESPACE
+                        kubectl set image deployment/pro1 app=${ARTIFACTORY}:${BUILD_NUMBER} --namespace=$NAMESPACE
                     '''
                 }
             }
