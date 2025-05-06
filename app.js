@@ -3,7 +3,7 @@ const http = require('http');
 let startTime = Date.now();
 
 const server = http.createServer((req, res) => {
-res.end('Hello from GCP Kubernetes!-1');
+res.end('Hello from GCP Kubernetes!-2');
 });
 
 // Timer that logs uptime every 1 second
