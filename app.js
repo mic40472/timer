@@ -1,7 +1,7 @@
 const http = require('http');
 
 const server = http.createServer((req, res) => {
-  res.end('Hello from GCP Kubernetes!');
+  res.end('Hello from GCP Kubernetes!-1');
 });
 
 server.listen(8080, () => {
