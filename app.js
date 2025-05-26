@@ -1,3 +1,7 @@
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
 class Stopwatch {
   constructor() {
     this.startTime = null;
@@ -7,26 +11,18 @@ class Stopwatch {
   }
 
   start() {
-    if (this.isRunning) {
-      console.log('Stopwatch is already running!');
-      return;
-    }
-   
+    if (this.isRunning) return { message: 'Stopwatch already running' };
     this.startTime = process.hrtime.bigint();
     this.isRunning = true;
-    console.log('Stopwatch started');
+    return { message: 'Stopwatch started' };
   }
 
   stop() {
-    if (!this.isRunning) {
-      console.log('Stopwatch is not running!');
-      return;
-    }
-   
+    if (!this.isRunning) return { message: 'Stopwatch is not running' };
     const endTime = process.hrtime.bigint();
-    this.elapsedTime += Number(endTime - this.startTime) / 1000000; // Convert to milliseconds
+    this.elapsedTime += Number(endTime - this.startTime) / 1000000;
     this.isRunning = false;
-    console.log(`Stopwatch stopped. Total elapsed time: ${this.getFormattedTime()}`);
+    return { message: `Stopwatch stopped`, elapsed: this.getFormattedTime() };
   }
 
   reset() {
@@ -34,25 +30,21 @@ class Stopwatch {
     this.elapsedTime = 0;
     this.isRunning = false;
     this.lapTimes = [];
-    console.log('Stopwatch reset');
+    return { message: 'Stopwatch reset' };
   }
 
   lap() {
-    if (!this.isRunning) {
-      console.log('Stopwatch is not running! Start it first.');
-      return;
-    }
-   
+    if (!this.isRunning) return { message: 'Start the stopwatch first' };
     const currentTime = this.getCurrentTime();
     this.lapTimes.push(currentTime);
-    console.log(`Lap ${this.lapTimes.length}: ${this.formatTime(currentTime)}`);
+    return {
+      message: `Lap ${this.lapTimes.length}`,
+      lapTime: this.formatTime(currentTime),
+    };
   }
 
   getCurrentTime() {
-    if (!this.isRunning) {
-      return this.elapsedTime;
-    }
-   
+    if (!this.isRunning) return this.elapsedTime;
     const currentTime = process.hrtime.bigint();
     return this.elapsedTime + (Number(currentTime - this.startTime) / 1000000);
   }
@@ -66,88 +58,36 @@ class Stopwatch {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     const milliseconds = Math.floor(timeInMs % 1000);
-   
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+    return `${minutes.toString().padStart(2, '0')}:${seconds
+      .toString()
+      .padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
   }
 
   getStatus() {
-    console.log(`Status: ${this.isRunning ? 'Running' : 'Stopped'}`);
-    console.log(`Current time: ${this.getFormattedTime()}`);
-   
-    if (this.lapTimes.length > 0) {
-      console.log('Lap times:');
-      this.lapTimes.forEach((lapTime, index) => {
-        console.log(`  Lap ${index + 1}: ${this.formatTime(lapTime)}`);
-      });
-    }
+    return {
+      status: this.isRunning ? 'Running' : 'Stopped',
+      currentTime: this.getFormattedTime(),
+      laps: this.lapTimes.map((lap, idx) => ({
+        lap: idx + 1,
+        time: this.formatTime(lap),
+      })),
+    };
   }
 }
 
-// Interactive CLI implementation
-const readline = require('readline');
-
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
 const stopwatch = new Stopwatch();
 
-function showMenu() {
-  console.log('\n--- Stopwatch Menu ---');
-  console.log('1. Start');
-  console.log('2. Stop');
-  console.log('3. Reset');
-  console.log('4. Lap');
-  console.log('5. Status');
-  console.log('6. Exit');
-  console.log('----------------------');
-}
+// REST API Routes
+app.get('/', (req, res) => res.send('Welcome to the Stopwatch API!'));
 
-function handleUserInput() {
-  rl.question('Enter your choice (1-6): ', (choice) => {
-    switch (choice.trim()) {
-      case '1':
-        stopwatch.start();
-        break;
-      case '2':
-        stopwatch.stop();
-        break;
-      case '3':
-        stopwatch.reset();
-        break;
-      case '4':
-        stopwatch.lap();
-        break;
-      case '5':
-        stopwatch.getStatus();
-        break;
-      case '6':
-        console.log('Goodbye!');
-        rl.close();
-        return;
-      default:
-        console.log('Invalid choice. Please enter 1-6.');
-    }
-   
-    setTimeout(() => {
-      showMenu();
-      handleUserInput();
-    }, 100);
-  });
-}
+app.post('/start', (req, res) => res.json(stopwatch.start()));
+app.post('/stop', (req, res) => res.json(stopwatch.stop()));
+app.post('/reset', (req, res) => res.json(stopwatch.reset()));
+app.post('/lap', (req, res) => res.json(stopwatch.lap()));
+app.get('/status', (req, res) => res.json(stopwatch.getStatus()));
 
-// Start the application
-console.log('Welcome to Node.js Stopwatch!');
-showMenu();
-handleUserInput();
+// Start server
+app.listen(PORT, () => {
+  console.log(`Stopwatch API server running on port ${PORT}`);
+});
 
-// Example usage without CLI:
-/*
-const sw = new Stopwatch();
-sw.start();
-setTimeout(() => sw.lap(), 1000);
-setTimeout(() => sw.lap(), 2000);
-setTimeout(() => sw.stop(), 3000);
-setTimeout(() => sw.getStatus(), 3100);
-*/
