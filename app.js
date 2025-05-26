@@ -1,19 +1,18 @@
-const http = require('http');
+const express = require('express');
+const app = express();
+const PORT = 3000;
 
-let startTime = Date.now();
+const startTime = Date.now();
 
-const server = http.createServer((req, res) => {
-res.end('Hello from GCP Kubernetes!-1');
+app.get('/', (req, res) => {
+  const uptime = Date.now() - startTime;
+  const minutes = Math.floor(uptime / 60000);
+  const seconds = Math.floor((uptime % 60000) / 1000);
+
+  res.send(`<h1>🏁 Sports Timer App</h1><p>⏱ Uptime: ${minutes}m ${seconds}s</p>`);
 });
 
-// Timer that logs uptime every 1 second
-setInterval(() => {
-const elapsedMs = Date.now() - startTime;
-const seconds = Math.floor(elapsedMs / 1000) % 60;
-const minutes = Math.floor(elapsedMs / 1000 / 60);
-console.log('Server uptime: ${minutes}m ${seconds}s');
-}, 1000);
-
-server.listen(8080, () => {
-console.log('Server running on port 8080');
+app.listen(PORT, () => {
+  console.log(`✅ Sports Timer app is running on port ${PORT}`);
 });
+
