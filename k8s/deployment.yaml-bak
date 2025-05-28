@@ -27,15 +27,4 @@ spec:
         image: us-central1-docker.pkg.dev/gcp-env-dev/image-repo/pro-1:latest
         ports:
         - containerPort: 3000
-        env:
-        - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: /secrets/key.json
-        volumeMounts:
-        - name: firestore-secret
-          mountPath: /secrets
-          readOnly: true
-      volumes:
-      - name: firestore-secret
-        secret:
-          secretName: firestore-sa
 
